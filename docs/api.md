@@ -1,40 +1,30 @@
-# HTTP API contract
+# HTTP API
 
-Base URL in dev: `http://localhost:8000`. All responses are JSON except the SSE stream.
+Base URL in dev: `http://localhost:8000`. Everything returns JSON except `/generate/stream`,
+which is an SSE stream. Some endpoints aren't built yet; those are marked below.
 
-This is the target contract for the MVP. Endpoints land across phases — see the roadmap in the
-[README](../README.md). Anything not yet built is marked _(planned)_.
-
----
-
-## `GET /health`
-
-Liveness check.
-
-**Response**
+## GET /health
 
 ```json
 { "ok": true }
 ```
 
----
+## POST /tokenize
 
-## `POST /tokenize`  _(Phase 1)_
+Splits text into tokens with GPT-2's tokenizer. No model call.
 
-Split text into tokens using the model's tokenizer. No model forward pass — fast.
-
-**Request**
+Request:
 
 ```json
 { "text": "The strawberry sat." }
 ```
 
-**Response**
+Response:
 
 ```json
 {
   "tokens": [
-    { "id": 464,   "piece": "The",   "display": "The" },
+    { "id": 464,   "piece": "The",    "display": "The" },
     { "id": 41236, "piece": "Ġstraw", "display": " straw" },
     { "id": 8396,  "piece": "berry",  "display": "berry" },
     { "id": 3332,  "piece": "Ġsat",   "display": " sat" },
@@ -43,97 +33,80 @@ Split text into tokens using the model's tokenizer. No model forward pass — fa
 }
 ```
 
-- `id` — the integer the model actually sees.
-- `piece` — raw byte-level-BPE token. `Ġ` = leading space, `Ċ` = newline. Show this in the
-  hover tooltip so the whitespace-is-part-of-the-token idea is visible.
-- `display` — `tokenizer.decode([id])`, human-readable. Render this on the chip.
+- `id` — the integer the model sees.
+- `piece` — raw byte-level BPE token. `Ġ` is a leading space, `Ċ` a newline. Shown in the chip tooltip.
+- `display` — `tokenizer.decode([id])`. Shown on the chip.
 
----
+## GET /generate/stream
 
-## `GET /generate/stream`  _(Phase 2)_
+Token-by-token generation over SSE. Open with `EventSource`.
 
-Streaming token-by-token generation over Server-Sent Events. Open with `EventSource`.
-
-**Query params**
+Query params:
 
 | param | default | notes |
 |-------|---------|-------|
-| `prompt` | _(required)_ | URL-encoded |
-| `max_tokens` | `32` | |
-| `temperature` | `1.0` | applied to logits before softmax |
+| `prompt` | required | URL-encoded |
+| `max_tokens` | 32 | |
+| `temperature` | 1.0 | applied to logits before softmax |
 
-**Event stream**
+Events:
 
 ```
 event: start
-data: {"gen_id":"a1b2c3…","prompt_tokens":[{"id":464,"display":"The","piece":"The"}, …]}
+data: {"gen_id":"a1b2c3","prompt_tokens":[{"id":464,"display":"The","piece":"The"}, ...]}
 
 event: token
 data: {"idx":5,"id":1842,"display":" red","piece":"Ġred","prob":0.34,
-       "topk":[{"id":1842,"display":" red","prob":0.34},{"id":2266,"display":" bright","prob":0.11}, …]}
-
-event: token
-data: { … one per decode step … }
+       "topk":[{"id":1842,"display":" red","prob":0.34},{"id":2266,"display":" bright","prob":0.11}, ...]}
 
 event: done
-data: {"gen_id":"a1b2c3…","n_tokens":32}
+data: {"gen_id":"a1b2c3","n_tokens":32}
 ```
 
-- `idx` — global position of the token in `prompt_tokens ++ generated`.
-- `prob` — probability the model assigned to the token it emitted (drives the confidence color).
-- `topk` — the alternatives considered at that step, highest first (~10).
-- The client must `EventSource.close()` on `done` and on error — the stream is not resumable.
-- Server keeps the full generation (final `input_ids`, per-token records) in memory keyed by
-  `gen_id`, capped at ~16 generations (oldest evicted).
+- `idx` — position of the token in `prompt_tokens ++ generated`.
+- `prob` — probability the model gave the token it picked. Drives the confidence color.
+- `topk` — alternatives at that step, highest first, about 10 of them.
+- The client closes the stream on `done` or error. It doesn't resume.
+- The server keeps each generation in memory keyed by `gen_id`, capped at ~16 (oldest dropped).
 
----
+## GET /attention
 
-## `GET /attention`  _(Phase 5)_
+*Not built yet.* Returns one attention row for a hovered token.
 
-One attention row for a hovered token. Small payload — never returns the full tensor.
-
-**Query params**
+Query params:
 
 | param | example | notes |
 |-------|---------|-------|
-| `gen_id` | `a1b2c3…` | from the stream's `done`/`start` event |
-| `token_idx` | `7` | global index of the hovered token |
-| `layer` | `5` | `0..11` for GPT-2 small |
-| `head` | `mean` | `0..11`, or `mean` for the average across heads |
+| `gen_id` | `a1b2c3` | from the `start`/`done` event |
+| `token_idx` | 7 | position of the hovered token |
+| `layer` | 5 | 0–11 |
+| `head` | `mean` | 0–11, or `mean` for the average across heads |
 
-**Response**
+Response:
 
 ```json
 { "weights": [0.02, 0.01, 0.40, 0.05, 0.31, 0.14, 0.07, 0.00] }
 ```
 
-- `weights[k]` = attention from `token_idx` to token `k`. Length is `token_idx + 1` (causal:
-  a token attends only to itself and earlier).
-- Row sums to ~1. Normalize by the row max for display alpha; don't re-softmax.
-- Computed from a single forward pass over the full realized sequence with
-  `output_attentions=True`, cached per `gen_id` on first request.
+- `weights[k]` is attention from `token_idx` to token `k`. Length is `token_idx + 1`, since a
+  token only attends to itself and earlier ones.
+- The row sums to about 1. Normalize by the row max for display; don't re-run softmax.
+- Comes from one forward pass over the full sequence with `output_attentions=True`, cached per
+  `gen_id`.
 
----
+## GET /models
 
-## `GET /models`  _(Phase 6, optional)_
-
-Registry so the frontend doesn't hard-code layer/head counts.
-
-**Response**
+*Not built yet.* Lets the frontend read layer/head counts instead of hard-coding them.
 
 ```json
 [ { "id": "gpt2", "n_layers": 12, "n_heads": 12 } ]
 ```
 
----
-
 ## Errors
-
-Standard FastAPI shape:
 
 ```json
 { "detail": "gen_id not found" }
 ```
 
-- `404` — unknown `gen_id` (evicted or never existed).
-- `422` — malformed request body / query params (FastAPI validation).
+- `404` — unknown `gen_id`.
+- `422` — bad request body or query params (FastAPI validation).

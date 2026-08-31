@@ -1,133 +1,73 @@
 # LLM Token & Attention Visualizer
 
-An interactive web app for seeing **how an LLM generates text, one token at a time** — the
-tokenization itself, the model's confidence in each token it picks, the alternatives it
-considered, and the attention patterns linking each generated token back to earlier ones.
+A web app that shows what happens inside GPT-2 as it generates text: how the prompt is
+tokenized, how confident the model is in each token it picks, what alternatives it considered,
+and which earlier tokens each new token attends to.
 
-Built to be genuinely educational: you watch the mechanics of generation, not just the output.
+Model is GPT-2 small (124M). It runs on CPU and exposes per-step logits and attention cleanly,
+which is what this needs.
 
-> Primary model: **GPT-2 small (124M)** — small enough to run on CPU, simple enough to introspect
-> cleanly (`output_attentions=True`, per-step logits), and rough enough that confidence drops are
-> visible when it rambles.
+## What it does
 
-See [`design_doc.MD`](./design_doc.MD) for the full vision and
-[`docs/api.md`](./docs/api.md) for the HTTP contract.
+1. **Tokenization** — the prompt splits into chips; hover one to see its token ID.
+2. **Confidence** — generated tokens are shaded green to red by the probability the model gave them.
+3. **Alternatives** — hover a token to see the top-k candidates it weighed and their probabilities.
+4. **Attention** — hover a token to shade every earlier token by how much attention it got.
+5. **Layer/head** — pick which attention layer and head (or the average) drives the shading.
 
----
+Generation streams token by token over SSE.
 
-## Features
+## Stack
 
-The MVP targets the first five visualizations from the design doc:
+- Backend: FastAPI, Hugging Face `transformers`, `torch` (CPU), `sse-starlette`. Generation runs
+  as a custom step-by-step loop rather than `model.generate()` so each step's logits, top-k, and
+  attention can be captured.
+- Frontend: React + Vite, `EventSource` for the token stream.
 
-| # | Feature | What you see |
-|---|---------|--------------|
-| 1 | Tokenization view | Prompt splits into colored chips; hover a chip for its token ID |
-| 2 | Confidence heatmap | Each generated token is shaded green→red by the probability the model gave it |
-| 3 | Probability popover | Hover a token to see the top-k alternatives it weighed, with probabilities |
-| 4 | Attention relighting | Hover a token to shade every earlier token by how much attention it received |
-| 5 | Layer/head selector | Choose which attention layer/head (or the mean) drives the relighting |
+See [`docs/api.md`](./docs/api.md) for the HTTP endpoints and [`design_doc.MD`](./design_doc.MD)
+for background.
 
-Generation **streams** — tokens appear one at a time via Server-Sent Events.
+## Running it
 
-Deferred (see roadmap): click-to-branch, model switcher + side-by-side, "guess the next token".
-
----
-
-## Tech stack
-
-- **Backend:** Python + FastAPI, Hugging Face `transformers` + `torch` (CPU), `sse-starlette`
-  for streaming. A custom token-by-token generation loop (not `.generate()`) so each step's
-  logits, top-k, and attention can be captured.
-- **Frontend:** React + Vite, native `EventSource` for the token stream.
-
----
-
-## Project structure
-
-```
-llm_visualizer/
-├── design_doc.MD          # vision, feature priority, model rationale
-├── docs/
-│   └── api.md             # HTTP endpoint contract
-├── backend/
-│   ├── requirements.txt
-│   └── app/
-│       ├── main.py        # FastAPI app, CORS, route wiring
-│       ├── models.py      # model/tokenizer registry + cache        (Phase 1+)
-│       ├── generate.py    # streaming token-by-token loop           (Phase 2)
-│       ├── stream.py      # SSE wrapper for the generation loop     (Phase 2)
-│       ├── attention.py   # full-sequence forward pass + cache      (Phase 5)
-│       └── store.py       # in-memory generation store              (Phase 2)
-└── frontend/
-    └── src/
-        ├── App.jsx
-        ├── api.js
-        ├── lib/           # color mapping, useGeneration hook
-        └── components/    # PromptInput, TokenChip, TokenStream, ProbPopover, LayerHeadSelector
-```
-
----
-
-## Getting started
-
-### Prerequisites
-
-- Python 3.11+ (developed on 3.14)
-- Node 18+ (developed on 26)
-
-### Backend
+Backend:
 
 ```bash
 cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt          # installs the CPU torch build
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-Check it: `curl -s localhost:8000/health` → `{"ok":true}`
-
-The first request that loads GPT-2 downloads the tokenizer (~1–2 MB) and, from Phase 2 on, the
-model weights (~500 MB) into `~/.cache/huggingface/`.
-
-### Frontend
+Frontend:
 
 ```bash
 cd frontend
 npm install
-npm run dev                              # http://localhost:5173
+npm run dev
 ```
 
-The dev server expects the backend on `http://localhost:8000` (allowed origin is set in
-`backend/app/main.py`).
+Open http://localhost:5173. The frontend expects the backend on port 8000.
 
----
+The first generation downloads GPT-2's weights (~500 MB) to `~/.cache/huggingface/`.
 
-## How generation works (short version)
+## Layout
 
-1. **Tokenize** — the prompt is split into integer token IDs by GPT-2's byte-level BPE tokenizer.
-   No model forward pass; instant.
-2. **Generate** — a custom loop runs the model one step at a time. Each step: forward pass →
-   logits for the next position → softmax → record the chosen token, its probability, and the
-   top-k alternatives → append and repeat. Each step is pushed to the browser as an SSE event.
-3. **Attention** — after generation, one forward pass over the full realized sequence with
-   `output_attentions=True` produces the 12×12 layer/head attention tensors, cached server-side.
-   The frontend fetches a single attention row per hover.
+```
+backend/app/
+  main.py        FastAPI app, routes, CORS
+  models.py      tokenizer + model loading and cache
+  generate.py    streaming generation loop
+  stream.py      SSE endpoint
+  attention.py   full-sequence forward pass for attention
+  store.py       in-memory store of past generations
+frontend/src/
+  api.js         fetch wrappers
+  lib/           useGeneration hook, color mapping
+  components/    PromptInput, TokenChip, TokenStream, ProbPopover, LayerHeadSelector
+```
 
-The off-by-one that matters everywhere: `logits[0, i]` is the distribution over token `i+1`.
+## Status
 
----
-
-## Roadmap
-
-- [x] **Phase 0** — scaffold, `/health`, CORS, frontend talks to backend
-- [ ] **Phase 1** — `/tokenize` + token chips with hover IDs (Feature 1)
-- [ ] **Phase 2** — streaming generation loop + SSE + in-memory store
-- [ ] **Phase 2b** — `EventSource` wiring, chips animate in
-- [ ] **Phase 3** — confidence heatmap (Feature 2)
-- [ ] **Phase 4** — probability popover (Feature 3)
-- [ ] **Phase 5** — attention relighting + `/attention` endpoint (Feature 4)
-- [ ] **Phase 6** — layer/head selector (Feature 5)
-
-Later: click-to-branch, model switcher + side-by-side comparison, guess-the-next-token,
-confidence sparkline, attention head grid, logit lens.
+Early. Scaffold and `/health` are in; tokenization, streaming generation, and the attention
+views are in progress. Planned later: regenerate from an alternative token, model switcher with
+side-by-side comparison, guess-the-next-token.

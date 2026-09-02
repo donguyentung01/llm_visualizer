@@ -55,7 +55,7 @@ The first generation downloads GPT-2's weights (~500 MB) to `~/.cache/huggingfac
 ```
 backend/app/
   main.py        FastAPI app, routes, CORS
-  models.py      tokenizer + model loading and cache
+  llm.py         tokenizer + model loading and cache
   generate.py    streaming generation loop
   stream.py      SSE endpoint
   attention.py   full-sequence forward pass for attention

@@ -2,6 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware 
 from pydantic import BaseModel
 from app.llm import tokenizer 
+import json 
+import uuid 
+from sse_starlette.sse import EventSourceResponse
+from app.generate import run_generation
 
 app = FastAPI() 
 
@@ -31,3 +35,14 @@ def tokenize(req: TokenizeRequest):
             for tid in ids
         ]
     }
+
+@app.get("/generate/stream")
+def generate_stream(prompt: str, max_tokens: int = 128,
+                    temperature: float = 0.7, do_sample: bool = False):
+    gen_id = uuid.uuid4().hex
+
+    def events():
+        for name, payload in run_generation(gen_id, prompt, max_tokens, temperature, do_sample):
+            yield {"event": name, "data": json.dumps(payload)}
+
+    return EventSourceResponse(events())

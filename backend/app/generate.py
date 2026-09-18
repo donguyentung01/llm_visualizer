@@ -28,10 +28,15 @@ def run_generation(gen_id, prompt, max_tokens=128, temperature=0.7, do_sample=Fa
     })
 
     generated = []
+    all_ids = input_ids
+    current_input = input_ids
+    past_key_values = None
 
     for step in range(max_tokens):
         with torch.no_grad():
-            next_logits = model(input_ids).logits[0, -1]      # (vocab,)
+            out = model(current_input, past_key_values=past_key_values, use_cache=True)
+        next_logits = out.logits[0, -1]      # (vocab,)
+        past_key_values = out.past_key_values
 
         # the model's actual distribution — used only for reporting
         true_probs = torch.softmax(next_logits, dim=-1)
@@ -69,11 +74,12 @@ def run_generation(gen_id, prompt, max_tokens=128, temperature=0.7, do_sample=Fa
 
         yield ("token", record)
 
-        input_ids = torch.cat([input_ids, torch.tensor([[next_id]])], dim=1)
+        current_input = torch.tensor([[next_id]])
+        all_ids = torch.cat([all_ids, current_input], dim=1)
 
     store.put(gen_id, {
-        "input_ids": input_ids[0].tolist(), 
-        "prompt_len": prompt_len, 
+        "input_ids": all_ids[0].tolist(),
+        "prompt_len": prompt_len,
         "generated": generated
     })
 

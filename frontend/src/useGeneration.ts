@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { Token, GeneratedToken, StartPayload, DonePayload } from "./types";
 
-const BASE = "http://localhost:8000";
+const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 export const MAX_TOKENS_LIMIT = 512;
 

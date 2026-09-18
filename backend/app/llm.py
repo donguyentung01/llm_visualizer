@@ -12,7 +12,7 @@ _model = None
 def get_model():
     global _model
     if _model is None:
-        _model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype=torch.float32)
+        _model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype=torch.bfloat16)
         _model.eval()
     return _model
 

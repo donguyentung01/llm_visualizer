@@ -20,6 +20,7 @@ const sectionLabel: CSSProperties = {
 
 function App() {
   const { promptTokens, generated, status, start } = useGeneration();
+  const [maxTokens, setMaxTokens] = useState(128);
   const [hovered, setHovered] = useState<{ token: GeneratedToken; rect: DOMRect } | null>(null);
 
   // keep the newest tokens in view as they stream in
@@ -58,7 +59,13 @@ function App() {
           >
             Watch the model generate, one token at a time.
           </p>
-          <PromptInput onSubmit={start} large model={MODEL} />
+          <PromptInput
+            onSubmit={(text) => start(text, maxTokens)}
+            maxTokens={maxTokens}
+            onMaxTokensChange={setMaxTokens}
+            large
+            model={MODEL}
+          />
         </div>
       </div>
     );
@@ -134,7 +141,12 @@ function App() {
         }}
       >
         <div style={COL}>
-          <PromptInput onSubmit={start} model={MODEL} />
+          <PromptInput
+            onSubmit={(text) => start(text, maxTokens)}
+            maxTokens={maxTokens}
+            onMaxTokensChange={setMaxTokens}
+            model={MODEL}
+          />
         </div>
       </div>
 

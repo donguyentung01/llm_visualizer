@@ -46,7 +46,7 @@ Query params:
 | param | default | notes |
 |-------|---------|-------|
 | `prompt` | required | URL-encoded |
-| `max_tokens` | 32 | |
+| `max_tokens` | 128 | 1–512 |
 | `temperature` | 1.0 | applied to logits before softmax |
 
 Events:

@@ -3,6 +3,8 @@ import type { Token, GeneratedToken, StartPayload, DonePayload } from "./types";
 
 const BASE = "http://localhost:8000";
 
+export const MAX_TOKENS_LIMIT = 512;
+
 type Status = "idle" | "streaming" | "done" | "error";
 
 export function useGeneration() {
@@ -12,7 +14,7 @@ export function useGeneration() {
   const [status, setStatus] = useState<Status>("idle");
   const esRef = useRef<EventSource | null>(null);
 
-  function start(prompt: string) {
+  function start(prompt: string, maxTokens: number) {
     // 1. close any stream already running
     esRef.current?.close();
 
@@ -23,7 +25,7 @@ export function useGeneration() {
     setStatus("streaming");
 
     // 3. open the stream
-    const url = `${BASE}/generate/stream?prompt=${encodeURIComponent(prompt)}`;
+    const url = `${BASE}/generate/stream?prompt=${encodeURIComponent(prompt)}&max_tokens=${maxTokens}`;
     const es = new EventSource(url);
     esRef.current = es;
 

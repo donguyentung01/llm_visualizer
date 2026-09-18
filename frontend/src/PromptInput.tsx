@@ -1,12 +1,15 @@
 import { useRef } from "react";
+import { MAX_TOKENS_LIMIT } from "./useGeneration";
 
 interface Props {
   onSubmit: (text: string) => void;
   large?: boolean;
   model?: string;
+  maxTokens: number;
+  onMaxTokensChange: (n: number) => void;
 }
 
-function PromptInput({ onSubmit, large = false, model }: Props) {
+function PromptInput({ onSubmit, large = false, model, maxTokens, onMaxTokensChange }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   function handleClick() {
@@ -66,6 +69,38 @@ function PromptInput({ onSubmit, large = false, model }: Props) {
         <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>
           {model}
         </span>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginLeft: "auto",
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            color: "var(--muted)",
+          }}
+        >
+          max tokens
+          <input
+            type="number"
+            min={1}
+            max={MAX_TOKENS_LIMIT}
+            value={maxTokens}
+            onChange={(e) => {
+              const n = Math.round(Number(e.target.value));
+              if (Number.isFinite(n)) onMaxTokensChange(Math.min(MAX_TOKENS_LIMIT, Math.max(1, n)));
+            }}
+            style={{
+              width: 56,
+              padding: "2px 6px",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              background: "transparent",
+              color: "var(--text)",
+              font: "inherit",
+            }}
+          />
+        </label>
         <button
           onClick={handleClick}
           aria-label="Generate"

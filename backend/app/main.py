@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware 
 from pydantic import BaseModel
 from app.llm import tokenizer 
@@ -37,7 +37,7 @@ def tokenize(req: TokenizeRequest):
     }
 
 @app.get("/generate/stream")
-def generate_stream(prompt: str, max_tokens: int = 128,
+def generate_stream(prompt: str, max_tokens: int = Query(128, ge=1, le=512),
                     temperature: float = 0.7, do_sample: bool = False):
     gen_id = uuid.uuid4().hex
 

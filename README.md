@@ -1,30 +1,23 @@
 # LLM Visualizer
 
-A small web app for watching a language model generate text one token at a time. You type a
-prompt and see how it gets split into tokens, how confident the model was about each token it
-picked, and which other tokens it was considering.
+A small web app for watching a language model write text one token at a time. You type a prompt
+and see how the model breaks it into tokens, how confident it was about each word it picked,
+and what else it was considering.
 
 ## What it does
 
-- **Tokenization**: the prompt is shown as token chips. Hover a chip to see its token ID.
-- **Confidence**: each generated token is colored by the probability the model gave it.
-- **Alternatives**: hover a generated token to see the top 10 candidates at that step and their
-  probabilities.
-- **Streaming**: tokens show up as they're generated.
+- **Tokenization**: see how your prompt is split into tokens.
+- **Confidence**: each generated token is colored by how sure the model was about it.
+- **Alternatives**: hover a token to see the other options the model had at that point.
+- **Streaming**: tokens show up live as they're generated.
 
-Attention visualization (which earlier tokens each new token attends to) is next on the list.
+Next up: showing which earlier words the model is "paying attention to" for each new token.
 
-## How it works
+## How it's built
 
-The backend is FastAPI running
-[Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) through Hugging Face
-`transformers`. I use my own generation loop instead of `model.generate()` so I can grab the
-probability distribution at every step. It uses the KV cache, and the tokens are streamed to the
-browser over server-sent events. The model loads in bf16 and runs fine on CPU.
-
-The frontend is React + TypeScript (Vite). It reads the stream with `EventSource`.
-
-The endpoints are described in [`docs/api.md`](./docs/api.md).
+A Python backend runs a small open model
+([Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct)) and streams each
+token to a React frontend as it's generated.
 
 ## Running locally
 
@@ -46,5 +39,4 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5173. The model weights (~1 GB) are downloaded the first time you
-generate something.
+Then open http://localhost:5173.

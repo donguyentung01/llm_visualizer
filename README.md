@@ -13,8 +13,6 @@ and what else it was considering.
 - **Alternatives**: hover a token to see the other options the model had at that point.
 - **Streaming**: tokens show up live as they're generated.
 
-Next up: showing which earlier words the model is "paying attention to" for each new token.
-
 ## How it's built
 
 A Python backend runs a small open model

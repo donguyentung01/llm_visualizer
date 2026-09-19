@@ -1,40 +1,39 @@
-# LLM Token & Attention Visualizer
+# LLM Visualizer
 
-A web app that shows what happens inside GPT-2 as it generates text: how the prompt is
-tokenized, how confident the model is in each token it picks, what alternatives it considered,
-and which earlier tokens each new token attends to.
-
-Model is GPT-2 small (124M). It runs on CPU and exposes per-step logits and attention cleanly,
-which is what this needs.
+A small web app for watching a language model generate text one token at a time. You type a
+prompt and see how it gets split into tokens, how confident the model was about each token it
+picked, and which other tokens it was considering.
 
 ## What it does
 
-1. **Tokenization** — the prompt splits into chips; hover one to see its token ID.
-2. **Confidence** — generated tokens are shaded green to red by the probability the model gave them.
-3. **Alternatives** — hover a token to see the top-k candidates it weighed and their probabilities.
-4. **Attention** — hover a token to shade every earlier token by how much attention it got.
-5. **Layer/head** — pick which attention layer and head (or the average) drives the shading.
+- **Tokenization**: the prompt is shown as token chips. Hover a chip to see its token ID.
+- **Confidence**: each generated token is colored by the probability the model gave it.
+- **Alternatives**: hover a generated token to see the top 10 candidates at that step and their
+  probabilities.
+- **Streaming**: tokens show up as they're generated.
 
-Generation streams token by token over SSE.
+Attention visualization (which earlier tokens each new token attends to) is next on the list.
 
-## Stack
+## How it works
 
-- Backend: FastAPI, Hugging Face `transformers`, `torch` (CPU), `sse-starlette`. Generation runs
-  as a custom step-by-step loop rather than `model.generate()` so each step's logits, top-k, and
-  attention can be captured.
-- Frontend: React + Vite, `EventSource` for the token stream.
+The backend is FastAPI running
+[Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) through Hugging Face
+`transformers`. I use my own generation loop instead of `model.generate()` so I can grab the
+probability distribution at every step. It uses the KV cache, and the tokens are streamed to the
+browser over server-sent events. The model loads in bf16 and runs fine on CPU.
 
-See [`docs/api.md`](./docs/api.md) for the HTTP endpoints and [`design_doc.MD`](./design_doc.MD)
-for background.
+The frontend is React + TypeScript (Vite). It reads the stream with `EventSource`.
 
-## Running it
+The endpoints are described in [`docs/api.md`](./docs/api.md).
+
+## Running locally
 
 Backend:
 
 ```bash
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -42,32 +41,10 @@ Frontend:
 
 ```bash
 cd frontend
+cp .env.example .env
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The frontend expects the backend on port 8000.
-
-The first generation downloads GPT-2's weights (~500 MB) to `~/.cache/huggingface/`.
-
-## Layout
-
-```
-backend/app/
-  main.py        FastAPI app, routes, CORS
-  llm.py         tokenizer + model loading and cache
-  generate.py    streaming generation loop
-  stream.py      SSE endpoint
-  attention.py   full-sequence forward pass for attention
-  store.py       in-memory store of past generations
-frontend/src/
-  api.js         fetch wrappers
-  lib/           useGeneration hook, color mapping
-  components/    PromptInput, TokenChip, TokenStream, ProbPopover, LayerHeadSelector
-```
-
-## Status
-
-Early. Scaffold and `/health` are in; tokenization, streaming generation, and the attention
-views are in progress. Planned later: regenerate from an alternative token, model switcher with
-side-by-side comparison, guess-the-next-token.
+Then open http://localhost:5173. The model weights (~1 GB) are downloaded the first time you
+generate something.

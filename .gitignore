@@ -33,3 +33,7 @@ npm-debug.log*
 *.safetensors
 *.bin
 .vercel
+
+# Local notes
+design_doc.MD
+design-canvas/

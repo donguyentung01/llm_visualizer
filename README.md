@@ -1,5 +1,6 @@
 # LLM Visualizer
 
+llmvisualizer.vercel.app/
 A small web app for watching a language model write text one token at a time. You type a prompt
 and see how the model breaks it into tokens, how confident it was about each word it picked,
 and what else it was considering.
